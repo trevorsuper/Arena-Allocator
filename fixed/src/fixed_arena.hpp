@@ -35,6 +35,26 @@ struct Fixed_arena {
 	Fixed_arena& operator*=(const Fixed_arena&) = delete;
 	Fixed_arena& operator/=(const Fixed_arena&) = delete;
 	
+	Fixed_arena(Fixed_arena&& other) noexcept : capacity(other.capacity), position(other.position), arena(other.arena)
+	{
+		other.capacity = 0;
+		other.position = 0;
+		other.arena = nullptr;
+	}
+	
+	Fixed_arena& operator=(Fixed_arena&& other) noexcept {
+		if (this != &other) {
+			std::free(arena);
+			capacity = other.capacity;
+			position = other.position;
+			arena = other.arena;
+			other.capacity = 0;
+			other.position = 0;
+			other.arena = nullptr;
+		}
+		return *this;
+	}
+	
 	template <typename T>
 	T *push_struct_z() {
 		return static_cast<T*>(push(sizeof(T), false)); // will zero the memory
@@ -46,13 +66,13 @@ struct Fixed_arena {
 	}
 	
 	template <typename T>
-	T *push_array_z() {
-		return static_cast<T*>(push(sizeof(T), false));
+	T *push_array_z(u64 n) {
+		return static_cast<T*>(push(sizeof(T) * n, false));
 	}
 	
 	template <typename T>
-	T *push_array_nz() {
-		return static_cast<T*>(push(sizeof(T), true));
+	T *push_array_nz(u64 n) {
+		return static_cast<T*>(push(sizeof(T) * n, true));
 	}
 	
 	explicit Fixed_arena(std::unsigned_integral auto n) : capacity(SizingFunction(n)), position(0) {
