@@ -1,4 +1,19 @@
-cc = clang++
+CC = clang++
+
+TARGET_ARCH ?=
+SYSROOT		?=
+CROSS_FLAGS ?=
+LDFLAGS		?=
+
+ifneq ($(TARGET_ARCH),)
+	CROSS_FLAGS += -target $(TARGET_ARCH)
+	LDFLAGS		+= -target $(TARGET_ARCH) -fuse-ld+lld
+endif
+
+ifneq ($(SYSROOT),)
+	CROSS_FLAGS += --sysroot=$(SYSROOT)
+	LDFLAGS	+= --sysroot=$(SYSROOT)
+endif
 
 src_dir = src
 debug_objects_dir = dbg
@@ -22,12 +37,12 @@ thread_dependencies = $(patsubst $(src_dir)/%.cpp,$(thread_objects_dir)/%.d,$(sr
 opt_objects         = $(patsubst $(src_dir)/%.cpp,$(opt_objects_dir)/%.o,$(src))
 opt_dependencies    = $(patsubst $(src_dir)/%.cpp,$(opt_objects_dir)/%.d,$(src))
 
-debug_flags = -Wall -Wextra -Werror -Wpedantic -O0 -g -MMD -MP -std=c++23
-debug_uba_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=undefined,address -march=native -MMD -MP -std=c++23
-debug_point_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=address,pointer-compare -MMD -MP -std=c++23
-debug_leak_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=leak -march=native -MMD -MP -std=c++23
-debug_thread_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=thread -march=native -MMD -MP -std=c++23
-optimized_flags = -Wall -Wextra -Werror -Wpedantic -fPIE -O2 -march=native -MMD -MP -std=c++23
+debug_flags = -Wall -Wextra -Werror -Wpedantic -O0 -g -MMD -MP -std=c++23 $(CROSS_FLAGS)
+debug_uba_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=undefined,address -MMD -MP -std=c++23 $(CROSS_FLAGS)
+debug_point_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=address,pointer-compare -MMD -MP -std=c++23 $(CROSS_FLAGS)
+debug_leak_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=leak -MMD -MP -std=c++23 $(CROSS_FLAGS)
+debug_thread_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=thread -MMD -MP -std=c++23 $(CROSS_FLAGS)
+optimized_flags = -Wall -Wextra -Werror -Wpedantic -fPIE -O2 -MMD -MP -std=c++23 $(CROSS_FLAGS)
 
 target = prg
 debug_target = $(target)-dbg
@@ -37,67 +52,71 @@ leak_target = $(target)-leak
 thread_target = $(target)-thread
 opt_target = $(target)
 
-.PHONY = debug uba point leak thread opt clean
+.PHONY: debug uba point leak thread opt clean
+
+define run_binary
+	$(if $(TARGET_ARCH), @echo "Cross-compiled binary created. Skipping execution.",./$<)
+endef
 
 debug: $(debug_target)
-	./$<
+	$(call run_binary)
 
 $(debug_target): $(debug_objects)
-	$(cc) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^
 
 $(debug_objects_dir)/%.o: $(src_dir)/%.cpp
 	@mkdir -p $(debug_objects_dir)
-	$(cc) $(debug_flags) -c $< -o $@
+	$(CC) $(debug_flags) -c $< -o $@
 
 uba: $(uba_target)
-	./$<
+	$(call run_binary)
 
 $(uba_target): $(uba_objects)
-	$(cc) -o $@ $^ -fsanitize=undefined,address
+	$(CC) $(LDFLAGS) -o $@ $^ -fsanitize=undefined,address
 
 $(uba_objects_dir)/%.o: $(src_dir)/%.cpp
 	@mkdir -p $(uba_objects_dir)
-	$(cc) $(debug_uba_flags) -c $< -o $@
+	$(CC) $(debug_uba_flags) -c $< -o $@
 
 point: $(point_target)
-	./$<
+	$(call run_binary)
 
 $(point_target): $(point_objects)
-	$(cc) -o $@ $^ -fsanitize=address,pointer-compare
+	$(CC) $(LDFLAGS) -o $@ $^ -fsanitize=address,pointer-compare
 
 $(point_objects_dir)/%.o: $(src_dir)/%.cpp
 	@mkdir -p $(point_objects_dir)
-	$(cc) $(debug_point_flags) -c $< -o $@
+	$(CC) $(debug_point_flags) -c $< -o $@
 
 leak: $(leak_target)
-	./$<
+	$(call run_binary)
 
 $(leak_target): $(leak_objects)
-	$(cc) -o $@ $^ -fsanitize=leak
+	$(CC) $(LDFLAGS) -o $@ $^ -fsanitize=leak
 
 $(leak_objects_dir)/%.o: $(src_dir)/%.cpp
 	@mkdir -p $(leak_objects_dir)
-	$(cc) $(debug_leak_flags) -c $< -o $@
+	$(CC) $(debug_leak_flags) -c $< -o $@
 
 thread: $(thread_target)
-	./$<
+	$(call run_binary)
 
 $(thread_target): $(thread_objects)
-	$(cc) -o $@ $^ -fsanitize=thread
+	$(CC) $(LDFLAGS) -o $@ $^ -fsanitize=thread
 
 $(thread_objects_dir)/%.o: $(src_dir)/%.cpp
 	@mkdir -p $(thread_objects_dir)
-	$(cc) $(debug_thread_flags) -c $< -o $@
+	$(CC) $(debug_thread_flags) -c $< -o $@
 
 opt: $(opt_target)
-	./$<
+	$(call run_binary)
 
 $(opt_target): $(opt_objects)
-	$(cc) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^
 
 $(opt_objects_dir)/%.o: $(src_dir)/%.cpp
 	@mkdir -p $(opt_objects_dir)
-	$(cc) $(optimized_flags) -c $< -o $@
+	$(CC) $(optimized_flags) -c $< -o $@
 
 clean:
 	rm -rf $(debug_objects_dir) $(uba_objects_dir) $(point_objects_dir) $(leak_objects_dir) $(thread_objects_dir) $(opt_objects_dir) \
