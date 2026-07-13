@@ -1,13 +1,12 @@
-CC = clang++
-
-TARGET_ARCH ?=
-SYSROOT		?=
-CROSS_FLAGS ?=
-LDFLAGS		?=
+CC 				= clang++
+TARGET_ARCH 	?=
+SYSROOT 		?=
+CROSS_FLAGS 	?=
+LDFLAGS 		?=
 
 ifneq ($(TARGET_ARCH),)
 	CROSS_FLAGS += -target $(TARGET_ARCH)
-	LDFLAGS		+= -target $(TARGET_ARCH) -fuse-ld+lld
+	LDFLAGS		+= -target $(TARGET_ARCH) -fuse-ld=lld
 endif
 
 ifneq ($(SYSROOT),)
@@ -15,116 +14,76 @@ ifneq ($(SYSROOT),)
 	LDFLAGS	+= --sysroot=$(SYSROOT)
 endif
 
-src_dir = src
-debug_objects_dir = dbg
-uba_objects_dir = uba
-point_objects_dir = point
-leak_objects_dir = leak
-thread_objects_dir = thread
-opt_objects_dir = opt
+SRC_DIR = src
+TARGET_BASE = prg
+SRC = $(wildcard $(SRC_DIR)/*.cpp)
 
-src = $(wildcard $(src_dir)/*.cpp)
-debug_objects       = $(patsubst $(src_dir)/%.cpp,$(debug_objects_dir)/%.o,$(src))
-debug_dependencies  = $(patsubst $(src_dir)/%.cpp,$(debug_objects_dir)/%.d,$(src))
-uba_objects         = $(patsubst $(src_dir)/%.cpp,$(uba_objects_dir)/%.o,$(src))
-uba_dependencies    = $(patsubst $(src_dir)/%.cpp,$(uba_objects_dir)/%.d,$(src))
-point_objects       = $(patsubst $(src_dir)/%.cpp,$(point_objects_dir)/%.o,$(src))
-point_dependencies  = $(patsubst $(src_dir)/%.cpp,$(point_objects_dir)/%.d,$(src))
-leak_objects        = $(patsubst $(src_dir)/%.cpp,$(leak_objects_dir)/%.o,$(src))
-leak_dependencies   = $(patsubst $(src_dir)/%.cpp,$(leak_objects_dir)/%.d,$(src))
-thread_objects      = $(patsubst $(src_dir)/%.cpp,$(thread_objects_dir)/%.o,$(src))
-thread_dependencies = $(patsubst $(src_dir)/%.cpp,$(thread_objects_dir)/%.d,$(src))
-opt_objects         = $(patsubst $(src_dir)/%.cpp,$(opt_objects_dir)/%.o,$(src))
-opt_dependencies    = $(patsubst $(src_dir)/%.cpp,$(opt_objects_dir)/%.d,$(src))
+# Build Configurations
+CONFIGS = debug uba point leak thread opt
 
-debug_flags = -Wall -Wextra -Werror -Wpedantic -O0 -g -MMD -MP -std=c++23 $(CROSS_FLAGS)
-debug_uba_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=undefined,address -MMD -MP -std=c++23 $(CROSS_FLAGS)
-debug_point_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=address,pointer-compare -MMD -MP -std=c++23 $(CROSS_FLAGS)
-debug_leak_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=leak -MMD -MP -std=c++23 $(CROSS_FLAGS)
-debug_thread_flags = -Wall -Wextra -Werror -Wpedantic -O0 -fsanitize=thread -MMD -MP -std=c++23 $(CROSS_FLAGS)
-optimized_flags = -Wall -Wextra -Werror -Wpedantic -fPIE -O2 -MMD -MP -std=c++23 $(CROSS_FLAGS)
+COMMON_FLAGS = -Wall -Wextra -Werror -Wpedantic -MMD -MP -std=c++23 $(CROSS_FLAGS)
 
-target = prg
-debug_target = $(target)-dbg
-uba_target = $(target)-uba
-point_target = $(target)-point
-leak_target = $(target)-leak
-thread_target = $(target)-thread
-opt_target = $(target)
+debug_dir 		= dbg
+debug_suffix 	= -dbg
+debug_cflags 	= $(COMMON_FLAGS) -O0 -g
+debug_ldflags 	= 
 
-.PHONY: debug uba point leak thread opt clean
+uba_dir 		= uba
+uba_suffix 		= -uba
+uba_cflags 		= $(COMMON_FLAGS) -O0 -fsanitize=undefined,address
+uba_ldflags 	= -fsanitize=undefined,address
+
+point_dir 		= point
+point_suffix 	= -point
+point_cflags 	= $(COMMON_FLAGS) -O0 -fsanitize=address,pointer-compare
+point_ldflags 	= -fsanitize=address,pointer-compare
+
+leak_dir 		= leak
+leak_suffix 	= -leak
+leak_cflags 	= $(COMMON_FLAGS) -O0 -fsanitize=leak
+leak_ldflags 	= -fsanitize=leak
+
+thread_dir 		= thread
+thread_suffix 	= -thread
+thread_cflags 	= $(COMMON_FLAGS) -O0 -fsanitize=thread
+thread_ldflags 	= -fsanitize=thread
+
+opt_dir 		= opt
+opt_suffix 		= 
+opt_cflags 		= $(COMMON_FLAGS) -fPIE -O2
+opt_ldflags 	= 
 
 define run_binary
 	$(if $(TARGET_ARCH), @echo "Cross-compiled binary created. Skipping execution.",./$<)
 endef
 
-debug: $(debug_target)
-	$(call run_binary)
+.PHONY: $(CONFIGS) all clean
 
-$(debug_target): $(debug_objects)
-	$(CC) $(LDFLAGS) -o $@ $^
+define CONFIG_template
 
-$(debug_objects_dir)/%.o: $(src_dir)/%.cpp
-	@mkdir -p $(debug_objects_dir)
-	$(CC) $(debug_flags) -c $< -o $@
+objs_$(1)		:= $$(patsubst $$(SRC_DIR)/%.cpp,$$($(1)_dir)/%.o,$$(SRC))
+deps_$(1)		:= $$(objs_$(1):.o=.d)
+target_$(1)		:= $$(TARGET_BASE)$$($(1)_suffix)
 
-uba: $(uba_target)
-	$(call run_binary)
+$(1): $$(target_$(1))
+	$$(call run_binary)
 
-$(uba_target): $(uba_objects)
-	$(CC) $(LDFLAGS) -o $@ $^ -fsanitize=undefined,address
+$$(target_$(1)): $$(objs_$(1))
+	$$(CC) $$(LDFLAGS) -o $$@ $$^ $$($(1)_ldflags)
 
-$(uba_objects_dir)/%.o: $(src_dir)/%.cpp
-	@mkdir -p $(uba_objects_dir)
-	$(CC) $(debug_uba_flags) -c $< -o $@
+$$($(1)_dir)/%.o: $$(SRC_DIR)/%.cpp
+	@mkdir -p $$(@D)
+	$$(CC) $$($(1)_cflags) -c $$< -o $$@
 
-point: $(point_target)
-	$(call run_binary)
+ALL_DIRS    := $(ALL_DIRS) $$($(1)_dir)
+ALL_TARGETS := $(ALL_TARGETS) $$(target_$(1))
 
-$(point_target): $(point_objects)
-	$(CC) $(LDFLAGS) -o $@ $^ -fsanitize=address,pointer-compare
+-include $$(deps_$(1))
+endef
 
-$(point_objects_dir)/%.o: $(src_dir)/%.cpp
-	@mkdir -p $(point_objects_dir)
-	$(CC) $(debug_point_flags) -c $< -o $@
+$(foreach config,$(CONFIGS),$(eval $(call CONFIG_template,$(config))))
 
-leak: $(leak_target)
-	$(call run_binary)
-
-$(leak_target): $(leak_objects)
-	$(CC) $(LDFLAGS) -o $@ $^ -fsanitize=leak
-
-$(leak_objects_dir)/%.o: $(src_dir)/%.cpp
-	@mkdir -p $(leak_objects_dir)
-	$(CC) $(debug_leak_flags) -c $< -o $@
-
-thread: $(thread_target)
-	$(call run_binary)
-
-$(thread_target): $(thread_objects)
-	$(CC) $(LDFLAGS) -o $@ $^ -fsanitize=thread
-
-$(thread_objects_dir)/%.o: $(src_dir)/%.cpp
-	@mkdir -p $(thread_objects_dir)
-	$(CC) $(debug_thread_flags) -c $< -o $@
-
-opt: $(opt_target)
-	$(call run_binary)
-
-$(opt_target): $(opt_objects)
-	$(CC) $(LDFLAGS) -o $@ $^
-
-$(opt_objects_dir)/%.o: $(src_dir)/%.cpp
-	@mkdir -p $(opt_objects_dir)
-	$(CC) $(optimized_flags) -c $< -o $@
+all: $(CONFIGS)
 
 clean:
-	rm -rf $(debug_objects_dir) $(uba_objects_dir) $(point_objects_dir) $(leak_objects_dir) $(thread_objects_dir) $(opt_objects_dir) \
-	$(debug_target) $(uba_target) $(point_target) $(leak_target) $(thread_target) $(opt_target)
-
--include $(debug_dependencies)
--include $(uba_dependencies)
--include $(point_dependencies)
--include $(leak_dependencies)
--include $(thread_dependencies)
--include $(opt_dependencies)
+	rm -rf $(ALL_DIRS) $(ALL_TARGETS)
