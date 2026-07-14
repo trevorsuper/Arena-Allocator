@@ -20,7 +20,6 @@ using u8  = std::uint8_t;
 constexpr u64 KiB(u64 n) noexcept { return n << 10; }
 constexpr u64 MiB(u64 n) noexcept { return n << 20; }
 constexpr u64 GiB(u64 n) noexcept { return n << 30; }
-//constexpr u64 sizing_function_that_will_not_compile(u64 n) noexcept { return n * 7; }
 
 template<auto F>
 concept ValidSizingFunction = (F == KiB) || (F == MiB) || (F == GiB);
