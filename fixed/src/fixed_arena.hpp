@@ -20,8 +20,13 @@ using u8  = std::uint8_t;
 constexpr u64 KiB(u64 n) noexcept { return n << 10; }
 constexpr u64 MiB(u64 n) noexcept { return n << 20; }
 constexpr u64 GiB(u64 n) noexcept { return n << 30; }
+//constexpr u64 sizing_function_that_will_not_compile(u64 n) noexcept { return n * 7; }
+
+template<auto F>
+concept ValidSizingFunction = (F == KiB) || (F == MiB) || (F == GiB);
 
 template <auto SizingFunction>
+requires ValidSizingFunction<SizingFunction>
 struct Fixed_arena {
 	Fixed_arena() = delete;								  // Delete the default constructor
 	Fixed_arena(const Fixed_arena&) = delete;			  // Delete the copy constructor
@@ -57,28 +62,27 @@ struct Fixed_arena {
 	
 	template <typename T>
 	T *push_struct_z() {
-		return static_cast<T*>(push(sizeof(T), false)); // will zero the memory
+		return static_cast<T*>(push(sizeof(T), alignof(T), false)); // will zero the memory
 	}
 	
 	template <typename T>
 	T *push_struct_nz() {
-		return static_cast<T*>(push(sizeof(T), true)); // will leave the memory empty
+		return static_cast<T*>(push(sizeof(T), alignof(T), true)); // will leave the memory empty
 	}
 	
 	template <typename T>
 	T *push_array_z(u64 n) {
-		return static_cast<T*>(push(sizeof(T) * n, false));
+		return static_cast<T*>(push(sizeof(T) * n, alignof(T), false));
 	}
 	
 	template <typename T>
 	T *push_array_nz(u64 n) {
-		return static_cast<T*>(push(sizeof(T) * n, true));
+		return static_cast<T*>(push(sizeof(T) * n, alignof(T), true));
 	}
 	
 	explicit Fixed_arena(std::unsigned_integral auto n) : capacity(SizingFunction(n)), position(0) {
 		arena = static_cast<std::byte*>(std::malloc(capacity));
-		
-		if (arena == nullptr) { // FIX LATER: bad if statement
+		if (arena == nullptr) {
 			capacity = 0;
 		}
 	}
@@ -87,8 +91,8 @@ struct Fixed_arena {
 		std::free(arena);
 	}
 	
-	void *push(u64 size, bool non_zero) {
-		u64 position_aligned = (((u64)(position) + ((u64)(sizeof(void*)) - 1)) & (~((u64)(sizeof(void*)) - 1)));
+	void *push(u64 size, u64 alignment, bool non_zero) {
+		u64 position_aligned = (position + (alignment - 1)) & ~(alignment - 1);
 		u64 new_position = position_aligned + size;
 		
 		if (new_position > capacity) {
@@ -96,7 +100,7 @@ struct Fixed_arena {
 		}
 		
 		position = new_position;
-		std::byte *out = static_cast<std::byte*>(arena) + position_aligned;
+		std::byte *out = arena + position_aligned;
 		
 		if (!non_zero) {
 			std::memset(out, 0, size);
@@ -119,6 +123,8 @@ struct Fixed_arena {
 	void clear() {
 		position = 0;
 	}
+	
+	explicit operator bool() const noexcept { return arena != nullptr; }
 	
 	u64 capacity;
 	u64 position;
