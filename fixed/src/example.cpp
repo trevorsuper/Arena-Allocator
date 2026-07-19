@@ -2,7 +2,6 @@
 #include <cstddef>
 #include <cstring>
 #include <algorithm>
-#include <memory>
 #include <iostream>
 #include "fixed_arena.hpp"
 
