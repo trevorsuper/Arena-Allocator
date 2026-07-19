@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include <cstdlib>
 #include <concepts>
 #include <algorithm>
 #include <memory>
@@ -21,11 +22,14 @@ constexpr u64 KiB(u64 n) noexcept { return n << 10; }
 constexpr u64 MiB(u64 n) noexcept { return n << 20; }
 constexpr u64 GiB(u64 n) noexcept { return n << 30; }
 
-template<auto F>
-concept ValidSizingFunction = (F == KiB) || (F == MiB) || (F == GiB);
+template<auto fn>
+concept ValidSizingFunction = (fn == KiB) || (fn == MiB) || (fn == GiB);
+		
+template<auto va>
+concept ValidAlignment = (va == 1) || (va == 2) || (va == 4) || (va == 8) || (va == 16) || (va == 32) || (va == 64);
 
-template <auto SizingFunction>
-requires ValidSizingFunction<SizingFunction>
+template <auto SizingFunction, auto MemoryAlignment>
+requires ValidSizingFunction<SizingFunction> && ValidAlignment<MemoryAlignment>
 struct Fixed_arena {
 	Fixed_arena() = delete;								  // Delete the default constructor
 	Fixed_arena(const Fixed_arena&) = delete;			  // Delete the copy constructor
@@ -38,8 +42,23 @@ struct Fixed_arena {
 	Fixed_arena& operator-=(const Fixed_arena&) = delete;
 	Fixed_arena& operator*=(const Fixed_arena&) = delete;
 	Fixed_arena& operator/=(const Fixed_arena&) = delete;
+	explicit operator bool() const noexcept { return arena != nullptr; }
 	
-	Fixed_arena(Fixed_arena&& other) noexcept : capacity(other.capacity), position(other.position), arena(other.arena)
+	explicit Fixed_arena(std::unsigned_integral auto n) : capacity(SizingFunction(n)), 
+														  position(0) {
+		arena = static_cast<std::byte*>(std::aligned_alloc(MemoryAlignment, capacity));
+		if (arena == nullptr) {
+			capacity = 0;
+		}
+	}
+	
+	~Fixed_arena() {
+		std::free(arena);
+	}
+	
+	Fixed_arena(Fixed_arena&& other) noexcept : capacity(other.capacity), 
+												position(other.position), 
+												arena(other.arena)
 	{
 		other.capacity = 0;
 		other.position = 0;
@@ -79,17 +98,6 @@ struct Fixed_arena {
 		return static_cast<T*>(push(sizeof(T) * n, alignof(T), true));
 	}
 	
-	explicit Fixed_arena(std::unsigned_integral auto n) : capacity(SizingFunction(n)), position(0) {
-		arena = static_cast<std::byte*>(std::malloc(capacity));
-		if (arena == nullptr) {
-			capacity = 0;
-		}
-	}
-	
-	~Fixed_arena() {
-		std::free(arena);
-	}
-	
 	void *push(u64 size, u64 alignment, bool non_zero) {
 		u64 position_aligned = (position + (alignment - 1)) & ~(alignment - 1);
 		u64 new_position = position_aligned + size;
@@ -122,8 +130,6 @@ struct Fixed_arena {
 	void clear() {
 		position = 0;
 	}
-	
-	explicit operator bool() const noexcept { return arena != nullptr; }
 	
 	u64 capacity;
 	u64 position;
