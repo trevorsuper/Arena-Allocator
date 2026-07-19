@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <concepts>
 #include <algorithm>
+#include <type_traits>
 
 using s64 = std::int64_t;
 using s32 = std::int32_t;
@@ -43,8 +44,7 @@ struct Fixed_arena {
 	Fixed_arena& operator/=(const Fixed_arena&) = delete;
 	explicit operator bool() const noexcept { return arena != nullptr; }
 	
-	explicit Fixed_arena(std::unsigned_integral auto n) : capacity(SizingFunction(n)), 
-														  position(0) {
+	explicit Fixed_arena(std::unsigned_integral auto n) : capacity(SizingFunction(n)), position(0) {
 		arena = static_cast<std::byte*>(std::aligned_alloc(MemoryAlignment, capacity));
 		if (arena == nullptr) {
 			capacity = 0;
@@ -55,9 +55,7 @@ struct Fixed_arena {
 		std::free(arena);
 	}
 	
-	Fixed_arena(Fixed_arena&& other) noexcept : capacity(other.capacity), 
-												position(other.position), 
-												arena(other.arena)
+	Fixed_arena(Fixed_arena&& other) noexcept : capacity(other.capacity), position(other.position), arena(other.arena)
 	{
 		other.capacity = 0;
 		other.position = 0;
@@ -78,27 +76,31 @@ struct Fixed_arena {
 	}
 	
 	template <typename T>
+	requires std::is_trivially_copyable_v<T>
 	T *push_struct_z() {
-		return static_cast<T*>(push(sizeof(T), alignof(T), false)); // will zero the memory
+		return static_cast<T*>(push(sizeof(T), false)); // will zero the memory
 	}
 	
 	template <typename T>
+	requires std::is_trivially_copyable_v<T>
 	T *push_struct_nz() {
-		return static_cast<T*>(push(sizeof(T), alignof(T), true)); // will leave the memory empty
+		return static_cast<T*>(push(sizeof(T), true)); // will leave the memory empty
 	}
 	
 	template <typename T>
+	requires std::is_trivially_copyable_v<T>
 	T *push_array_z(u64 n) {
-		return static_cast<T*>(push(sizeof(T) * n, alignof(T), false));
+		return static_cast<T*>(push(sizeof(T) * n, false));
 	}
 	
 	template <typename T>
+	requires std::is_trivially_copyable_v<T>
 	T *push_array_nz(u64 n) {
-		return static_cast<T*>(push(sizeof(T) * n, alignof(T), true));
+		return static_cast<T*>(push(sizeof(T) * n, true));
 	}
 	
-	void *push(u64 size, u64 alignment, bool non_zero) {
-		u64 position_aligned = (position + (alignment - 1)) & ~(alignment - 1);
+	void *push(u64 size, bool non_zero) {
+		u64 position_aligned = (position + (MemoryAlignment - 1)) & ~(MemoryAlignment - 1);
 		u64 new_position = position_aligned + size;
 		
 		if (new_position > capacity) {
