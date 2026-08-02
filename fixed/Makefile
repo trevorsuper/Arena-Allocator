@@ -57,7 +57,9 @@ define run_binary
 	$(if $(TARGET_ARCH), @echo "Cross-compiled binary created. Skipping execution.",./$<)
 endef
 
-.PHONY: $(CONFIGS) all clean
+NO_RUN_TARGETS = $(addsuffix -no-run,$(CONFIGS))
+
+.PHONY: $(CONFIGS) $(NO_RUN_TARGETS) all clean
 
 define CONFIG_template
 
@@ -67,6 +69,8 @@ target_$(1)		:= $$(TARGET_BASE)$$($(1)_suffix)
 
 $(1): $$(target_$(1))
 	$$(call run_binary)
+
+$(1)-no-run: $$(target_$(1))
 
 $$(target_$(1)): $$(objs_$(1))
 	$$(CC) $$(LDFLAGS) -o $$@ $$^ $$($(1)_ldflags)
