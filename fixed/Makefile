@@ -30,28 +30,28 @@ debug_ldflags 	=
 
 uba_dir 		= uba
 uba_suffix 		= -uba
-uba_cflags 		= $(COMMON_FLAGS) -O0 -fsanitize=undefined,address
+uba_cflags 		= $(COMMON_FLAGS) -fPIE -O0 -fsanitize=undefined,address
 uba_ldflags 	= -fsanitize=undefined,address
 
 point_dir 		= point
 point_suffix 	= -point
-point_cflags 	= $(COMMON_FLAGS) -O0 -fsanitize=address,pointer-compare
+point_cflags 	= $(COMMON_FLAGS) -fPIE -O0 -fsanitize=address,pointer-compare
 point_ldflags 	= -fsanitize=address,pointer-compare
 
 leak_dir 		= leak
 leak_suffix 	= -leak
-leak_cflags 	= $(COMMON_FLAGS) -O0 -fsanitize=leak
+leak_cflags 	= $(COMMON_FLAGS) -fPIE -O0 -fsanitize=leak
 leak_ldflags 	= -fsanitize=leak
 
 thread_dir 		= thread
 thread_suffix 	= -thread
-thread_cflags 	= $(COMMON_FLAGS) -O0 -fsanitize=thread
+thread_cflags 	= $(COMMON_FLAGS) -fPIE -O0 -fsanitize=thread
 thread_ldflags 	= -fsanitize=thread
 
 opt_dir 		= opt
 opt_suffix 		= 
-opt_cflags 		= $(COMMON_FLAGS) -fPIE -O2
-opt_ldflags 	= 
+opt_cflags 		= $(COMMON_FLAGS) -fPIE -O2 -flto=thin
+opt_ldflags 	= -flto=thin
 
 define run_binary
 	$(if $(TARGET_ARCH), @echo "Cross-compiled binary created. Skipping execution.",./$<)
